@@ -14,6 +14,7 @@ export default function App() {
   const [poles, setPoles] = useState([]);
   const [dts, setDts] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [topoEdges, setTopoEdges] = useState([]); // {parent_id, child_id, dt_id}
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
@@ -32,6 +33,21 @@ export default function App() {
       setPoles(polesRes.data);
       setDts(dtsRes.data);
       setIncidents(incidentsRes.data);
+
+      // Fetch topology edges for all DTs (to draw wire lines on the map)
+      const dtIds = dtsRes.data.map((d) => d.dt_id);
+      const topoResults = await Promise.all(
+        dtIds.map((dtId) => axios.get(`/api/network/topology/${dtId}`).catch(() => null))
+      );
+      const allEdges = [];
+      topoResults.forEach((res, i) => {
+        if (res && res.data && res.data.edges) {
+          res.data.edges.forEach((edge) => {
+            allEdges.push({ ...edge, dt_id: dtIds[i] });
+          });
+        }
+      });
+      setTopoEdges(allEdges);
     } catch (err) {
       console.error('Error fetching grid data:', err);
     }
@@ -47,10 +63,21 @@ export default function App() {
       setSseConnected(true);
     };
 
+    // Generic fallback for un-named events
     eventSource.onmessage = (event) => {
-      // Re-fetch state whenever telemetry update arrives
       fetchData();
     };
+
+    // Named events sent by backend via broadcast_sse_event()
+    const sseEvents = [
+      'incident_created',
+      'incident_updated',
+      'incident_verified',
+      'telemetry_update',
+    ];
+    sseEvents.forEach((evtName) => {
+      eventSource.addEventListener(evtName, () => fetchData());
+    });
 
     eventSource.onerror = (err) => {
       setSseConnected(false);
@@ -70,6 +97,15 @@ export default function App() {
     }
   };
 
+  // Called by SimulatorPanel after injecting a fault.
+  // The backend runs fault detection as a background task, so we do an
+  // immediate refresh + a delayed one to catch the newly-created incident.
+  const handleSimulatorRefresh = useCallback(() => {
+    fetchData();
+    setTimeout(fetchData, 1500);
+    setTimeout(fetchData, 3500);
+  }, [fetchData]);
+
   return (
     <div className="app-container">
       {/* Top Header Navbar */}
@@ -81,6 +117,7 @@ export default function App() {
           poles={poles}
           dts={dts}
           incidents={incidents}
+          topoEdges={topoEdges}
           selectedIncident={selectedIncident}
           onSelectIncident={setSelectedIncident}
         />
@@ -111,7 +148,7 @@ export default function App() {
       <SimulatorPanel
         isOpen={simulatorOpen}
         onClose={() => setSimulatorOpen(false)}
-        onRefresh={fetchData}
+        onRefresh={handleSimulatorRefresh}
       />
     </div>
   );

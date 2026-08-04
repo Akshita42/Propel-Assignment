@@ -78,6 +78,7 @@ class FaultCandidate:
     # Confidence
     confidence_score: float = 0.0
     topology_source: TopologySource = TopologySource.NONE
+    consistency_ratio: Optional[float] = None
     pincode: Optional[str] = None
     ward: Optional[str] = None
     households_affected: Optional[int] = None
@@ -239,10 +240,12 @@ async def detect_faults_for_dt(
     # FEEDER FAULT: If all poles across ALL DTs on this feeder are dark
     # (handled at feeder level in detect_all_faults — skip here)
 
-    # DT FAULT: All poles under this DT are dark
+    # DT FAULT: If no poles are LIVE and majority of device poles are DARK
     live_poles = {pid for pid, p in pole_states.items() if p.last_state == PoleState.LIVE}
-    if not live_poles and len(dark_set) == len([p for p in pole_states.values() if p.device_id]):
-        # Entire DT is dark
+    device_pole_count = len([p for p in pole_states.values() if p.device_id])
+
+    if not live_poles and len(dark_set) >= max(1, int(device_pole_count * 0.40)):
+        # Entire DT (or vast majority) is dark with 0 live poles -> DT fault
         affected_ids = list(dark_set)
         return [FaultCandidate(
             dt_id=dt_id,
@@ -282,8 +285,18 @@ async def detect_faults_for_dt(
         logger.info(f"DT {dt_id}: all dark poles explained by sensor failures — no fault ticket")
         return []
 
-    # BOUNDARY DETECTION: Find live→dark edges
+    # BOUNDARY DETECTION: Find live->dark edges
     boundaries = topology.get_upstream_boundary(filtered_dark)
+
+    # Fallback: if no live->dark edge found (e.g. root poles went dark but dropped power_lost message),
+    # find the highest/root-most dark poles in the topology tree
+    if not boundaries and filtered_dark:
+        for dark_pid in filtered_dark:
+            parent_id = topology.parent_map.get(dark_pid)
+            if not parent_id or parent_id not in filtered_dark:
+                # This is an entry boundary into the dark region
+                conf = topology.pole_confidence.get(dark_pid, 0.60)
+                boundaries.append((parent_id or dark_pid, dark_pid, conf))
 
     if not boundaries:
         # No clean boundary found — either all poles dark (DT fault already caught)
@@ -325,30 +338,21 @@ async def detect_faults_for_dt(
             downstream_dark, pole_states, topology, first_dark
         )
 
-        # Final confidence: edge confidence × consistency ratio
-        # Also factor in topology source
+        # Final confidence: edge confidence weighted by consistency
         base_conf = edge_conf
-        final_conf = base_conf * consistency
+        final_conf = max(0.40, base_conf * (0.5 + 0.5 * consistency))
 
-        # Clamp minimum confidence for span-level localization
-        if final_conf < settings.MIN_SPAN_CONFIDENCE and topology.source != TopologySource.GOLD:
-            # Fall back to DT-level for very low confidence
+        # Always pinpoint span location when boundary exists
+        live_pole = pole_states.get(live_parent)
+        dark_pole = pole_states.get(first_dark)
+        if live_pole and dark_pole:
+            fault_lat = (live_pole.lat + dark_pole.lat) / 2
+            fault_lon = (live_pole.lon + dark_pole.lon) / 2
+        else:
             fault_lat = dt.lat
             fault_lon = dt.lon
-            span_from = None
-            span_to = None
-        else:
-            # Compute fault location: midpoint between last live and first dark
-            live_pole = pole_states.get(live_parent)
-            dark_pole = pole_states.get(first_dark)
-            if live_pole and dark_pole:
-                fault_lat = (live_pole.lat + dark_pole.lat) / 2
-                fault_lon = (live_pole.lon + dark_pole.lon) / 2
-            else:
-                fault_lat = dt.lat
-                fault_lon = dt.lon
-            span_from = live_parent
-            span_to = first_dark
+        span_from = live_parent
+        span_to = first_dark
 
         # Pincode / ward from first dark pole
         first_dark_pole = pole_states.get(first_dark)

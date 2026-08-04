@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -10,7 +10,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Custom Fault Pin Icon
+// Custom Fault Pin Icon (for DT / Feeder level faults)
 const faultIcon = new L.DivIcon({
   className: 'custom-fault-marker',
   html: `<div style="
@@ -37,7 +37,7 @@ function RecenterMap({ center }) {
   return null;
 }
 
-export default function NetworkMap({ poles, dts, incidents, selectedIncident, onSelectIncident }) {
+export default function NetworkMap({ poles, dts, incidents, topoEdges = [], selectedIncident, onSelectIncident }) {
   // Default map center: Bangalore South subdivision
   const defaultCenter = [12.9352, 77.5831];
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -47,6 +47,52 @@ export default function NetworkMap({ poles, dts, incidents, selectedIncident, on
       setMapCenter([selectedIncident.fault_lat, selectedIncident.fault_lon]);
     }
   }, [selectedIncident]);
+
+  // Build a quick lookup: pole_id → {lat, lon}
+  const poleCoords = useMemo(() => {
+    const map = {};
+    poles.forEach((p) => { map[p.pole_id] = { lat: p.lat, lon: p.lon }; });
+    return map;
+  }, [poles]);
+
+  // Compute wire lines (grey polylines) from topology edges
+  const wireLines = useMemo(() => {
+    return topoEdges
+      .map((edge) => {
+        const from = poleCoords[edge.parent_id];
+        const to = poleCoords[edge.child_id];
+        if (!from || !to) return null;
+        return {
+          key: `${edge.parent_id}-${edge.child_id}`,
+          positions: [[from.lat, from.lon], [to.lat, to.lon]],
+        };
+      })
+      .filter(Boolean);
+  }, [topoEdges, poleCoords]);
+
+  // Compute fault span lines (bold red) for SPAN incidents
+  const spanFaultLines = useMemo(() => {
+    return incidents
+      .filter(
+        (inc) =>
+          inc.fault_type === 'SPAN' &&
+          inc.span_from_pole_id &&
+          inc.span_to_pole_id
+      )
+      .map((inc) => {
+        const from = poleCoords[inc.span_from_pole_id];
+        const to = poleCoords[inc.span_to_pole_id];
+        if (!from || !to) return null;
+        const isSelected = selectedIncident && selectedIncident.id === inc.id;
+        return {
+          key: inc.id,
+          inc,
+          positions: [[from.lat, from.lon], [to.lat, to.lon]],
+          isSelected,
+        };
+      })
+      .filter(Boolean);
+  }, [incidents, poleCoords, selectedIncident]);
 
   return (
     <div className="map-container">
@@ -63,6 +109,51 @@ export default function NetworkMap({ poles, dts, incidents, selectedIncident, on
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Wire network lines (grey, drawn first so they appear under poles) */}
+        {wireLines.map((line) => (
+          <Polyline
+            key={line.key}
+            positions={line.positions}
+            pathOptions={{
+              color: '#334155',
+              weight: 1.5,
+              opacity: 0.7,
+            }}
+          />
+        ))}
+
+        {/* Span Fault Lines — bold red between the two boundary poles */}
+        {spanFaultLines.map((line) => (
+          <Polyline
+            key={line.key}
+            positions={line.positions}
+            pathOptions={{
+              color: '#ef4444',
+              weight: line.isSelected ? 7 : 5,
+              opacity: 0.95,
+              dashArray: '10, 6',
+            }}
+            eventHandlers={{
+              click: () => onSelectIncident(line.inc),
+            }}
+          >
+            <Popup>
+              <div style={{ padding: '6px', maxWidth: '220px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase' }}>
+                  ⚡ Span Fault
+                </div>
+                <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#1e293b' }}>
+                  DT: {line.inc.dt_id}<br />
+                  From: <strong>{line.inc.span_from_pole_id}</strong><br />
+                  To: <strong style={{ color: '#ef4444' }}>{line.inc.span_to_pole_id}</strong><br />
+                  Poles affected: <strong>{line.inc.affected_pole_count}</strong><br />
+                  Confidence: <strong>{line.inc.confidence_level} ({(line.inc.confidence_score * 100).toFixed(0)}%)</strong>
+                </div>
+              </div>
+            </Popup>
+          </Polyline>
+        ))}
 
         {/* DT Markers */}
         {dts.map((dt) => (
@@ -96,7 +187,7 @@ export default function NetworkMap({ poles, dts, incidents, selectedIncident, on
           let fillColor = '#22c55e'; // LIVE
           if (pole.last_state === 'DARK') fillColor = '#ef4444';
           if (pole.last_state === 'UNKNOWN') fillColor = '#94a3b8';
-          if (pole.last_state === 'DEVICE_FAILURE') fillColor = '#eab308'; // Sensor paradox
+          if (pole.last_state === 'DEVICE_FAILURE') fillColor = '#eab308';
 
           return (
             <CircleMarker
@@ -125,10 +216,10 @@ export default function NetworkMap({ poles, dts, incidents, selectedIncident, on
           );
         })}
 
-        {/* Fault Location Pins */}
+        {/* Fault Location Pins — only for DT/FEEDER faults (SPAN faults are shown as lines above) */}
         {incidents.map((inc) => {
+          if (inc.fault_type === 'SPAN') return null; // shown as red polyline
           if (!inc.fault_lat || !inc.fault_lon) return null;
-          const isSelected = selectedIncident && selectedIncident.id === inc.id;
 
           return (
             <Marker
@@ -146,7 +237,6 @@ export default function NetworkMap({ poles, dts, incidents, selectedIncident, on
                   </div>
                   <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#f8fafc' }}>
                     DT: {inc.dt_id}<br />
-                    Span: {inc.span_from_pole_id || 'N/A'} → {inc.span_to_pole_id || 'N/A'}<br />
                     Poles affected: <strong>{inc.affected_pole_count}</strong><br />
                     Confidence: <strong>{inc.confidence_level} ({(inc.confidence_score * 100).toFixed(0)}%)</strong>
                   </div>
