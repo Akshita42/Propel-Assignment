@@ -25,6 +25,7 @@ from app.models import Pole, TelemetryEvent, PoleState
 from app.schemas.schemas import TelemetryPayload, TelemetryBatchPayload, IngestResponse
 from app.core.fault_detector import detect_all_faults
 from app.core.incident_manager import create_incident_from_candidate, broadcast_sse_event, check_restoration
+from app.core.topology_engine import topology_engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
@@ -121,7 +122,8 @@ async def ingest_telemetry(
 
     # Trigger fault detection in background if power_lost received
     if status == "accepted" and payload.event in ("power_lost",):
-        background_tasks.add_task(_run_fault_detection)
+        dt_id = topology_engine.get_pole_dt(payload.pole_id)
+        background_tasks.add_task(_run_fault_detection, dt_id)
 
     # Trigger restoration check if power_restored received
     if status == "accepted" and payload.event in ("power_restored", "boot"):
@@ -140,6 +142,7 @@ async def ingest_batch(
     accepted = duplicates = unknown = 0
     has_power_lost = False
     has_power_restored = False
+    affected_dt_ids = set()
 
     for msg in payload.messages:
         status, is_dup = await process_single_message(session, msg)
@@ -147,6 +150,9 @@ async def ingest_batch(
             accepted += 1
             if msg.event == "power_lost":
                 has_power_lost = True
+                dt_id = topology_engine.get_pole_dt(msg.pole_id)
+                if dt_id:
+                    affected_dt_ids.add(dt_id)
             if msg.event in ("power_restored", "boot"):
                 has_power_restored = True
         elif is_dup:
@@ -155,19 +161,22 @@ async def ingest_batch(
             unknown += 1
 
     if has_power_lost:
-        background_tasks.add_task(_run_fault_detection)
+        if len(affected_dt_ids) == 1:
+            background_tasks.add_task(_run_fault_detection, list(affected_dt_ids)[0])
+        else:
+            background_tasks.add_task(_run_fault_detection, None)
     if has_power_restored:
         background_tasks.add_task(_run_restoration_check_all)
 
     return IngestResponse(accepted=accepted, duplicates=duplicates, unknown_poles=unknown)
 
 
-async def _run_fault_detection():
+async def _run_fault_detection(dt_id: Optional[str] = None):
     """Background task: run fault detection and create incidents."""
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         try:
-            candidates = await detect_all_faults(session)
+            candidates = await detect_all_faults(session, target_dt_id=dt_id)
             for candidate in candidates:
                 incident = await create_incident_from_candidate(session, candidate)
                 if incident:

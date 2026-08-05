@@ -379,15 +379,22 @@ async def detect_faults_for_dt(
     return candidates
 
 
-async def detect_all_faults(session: AsyncSession) -> list[FaultCandidate]:
+async def detect_all_faults(
+    session: AsyncSession,
+    target_dt_id: Optional[str] = None,
+) -> list[FaultCandidate]:
     """
-    Run fault detection across all DTs.
-    Also checks for feeder-level faults (all DTs on a feeder dark).
+    Run fault detection across DTs.
+    If target_dt_id is provided, scopes detection to that specific DT for fast execution.
+    Otherwise scans all DTs (for feeder-level or full grid sweeps).
     """
     outage_targets = await get_active_scheduled_outage_targets(session)
     all_candidates: list[FaultCandidate] = []
 
-    dt_ids = topology_engine.get_all_dt_ids()
+    if target_dt_id:
+        dt_ids = [target_dt_id] if target_dt_id in topology_engine.get_all_dt_ids() else []
+    else:
+        dt_ids = topology_engine.get_all_dt_ids()
 
     # Per-DT detection
     dt_candidates: dict[str, list[FaultCandidate]] = {}
