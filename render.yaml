@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: propel-fault-localizer
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: "cd frontend && npm install && npm run build && mkdir -p ../backend/static && cp -r dist/* ../backend/static/ && cd ../backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./propel.db
+      - key: APP_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
