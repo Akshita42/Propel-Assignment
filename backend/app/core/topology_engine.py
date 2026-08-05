@@ -55,13 +55,13 @@ class TopologyEdge:
 class DTTopology:
     """Complete topology for one distribution transformer."""
     dt_id: str
-    source: TopologySource               # Worst-case source used
+    source: TopologySource = TopologySource.NONE        # Worst-case source used
     edges: list[TopologyEdge] = field(default_factory=list)
-    parent_map: dict[str, str] = field(default_factory=dict)    # child_id → parent_id
-    children_map: dict[str, list[str]] = field(default_factory=dict)  # parent_id → [child_ids]
+    parent_map: dict[str, str] = field(default_factory=dict)    # child_id -> parent_id
+    children_map: dict[str, list[str]] = field(default_factory=dict)  # parent_id -> [child_ids]
     root_pole_ids: list[str] = field(default_factory=list)      # First poles from DT
     all_pole_ids: set[str] = field(default_factory=set)
-    pole_confidence: dict[str, float] = field(default_factory=dict)  # child → edge confidence
+    pole_confidence: dict[str, float] = field(default_factory=dict)  # child -> edge confidence
 
     def get_downstream(self, pole_id: str) -> list[str]:
         """BFS to get all poles downstream of a given pole (inclusive)."""

@@ -90,7 +90,6 @@ async def seed_network(session: AsyncSession, num_dts: int = 40):
     # Insert Scheduled Outages
     outages_data = generate_scheduled_outages(dts, feeder_ids)
     for o in outages_data:
-        from datetime import datetime
         session.add(ScheduledOutage(
             id=o["id"],
             scope=o["scope"],
@@ -99,7 +98,7 @@ async def seed_network(session: AsyncSession, num_dts: int = 40):
             end_time=datetime.fromisoformat(o["end_time"]),
             reason=o["reason"],
         ))
-    print(f"✓ Inserted {len(outages_data)} scheduled outages")
+    print(f"[OK] Inserted {len(outages_data)} scheduled outages")
 
     return dts, poles
 

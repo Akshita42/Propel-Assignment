@@ -1,16 +1,23 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from app.config import get_settings
 
 settings = get_settings()
 
+# Fallback to local SQLite file for development if Postgres is not accessible
+db_url = os.environ.get("DATABASE_URL", settings.DATABASE_URL)
+if "sqlite" in db_url or not db_url:
+    db_url = "sqlite+aiosqlite:///./propel.db"
+
+is_sqlite = "sqlite" in db_url
+
+connect_args = {"check_same_thread": False, "timeout": 30.0} if is_sqlite else {}
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_size=20,
-    max_overflow=40,       # Handle burst: 5000 msg/10s requires headroom
-    pool_timeout=30,
-    pool_pre_ping=True,    # Detect stale connections
+    db_url,
     echo=False,
+    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(

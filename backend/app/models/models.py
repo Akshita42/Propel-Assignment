@@ -90,8 +90,8 @@ class Pole(Base):
     pole_id = Column(String, primary_key=True)
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
-    feeder_id = Column(String, nullable=False, index=True)
-    dt_id = Column(String, ForeignKey("distribution_transformers.dt_id"), nullable=False, index=True)
+    feeder_id = Column(String, nullable=False)
+    dt_id = Column(String, ForeignKey("distribution_transformers.dt_id"), nullable=False)
     seq_on_line = Column(Integer, nullable=True)          # NULL for 60% of DTs
     parent_pole_id = Column(String, ForeignKey("poles.pole_id"), nullable=True)
     pole_type = Column(String, nullable=True)
