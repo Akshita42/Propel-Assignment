@@ -261,10 +261,28 @@ class TestConfidenceScoring:
         level = score_to_level(1.0)
         assert level == ConfidenceLevel.HIGH
 
+    def test_silver_topology_cooccurrence(self):
+        """Co-occurrence ratio >= 0.85 promotes Bronze edge to SILVER (0.85 confidence)."""
+        from app.core.topology_engine import topology_engine, TopologySource
+
+        cooc = MagicMock()
+        cooc.pole_a_id = "P1"
+        cooc.pole_b_id = "P2"
+        cooc.a_dark_total = 10
+        cooc.b_dark_total = 10
+        cooc.co_dark_count = 9  # 9/10 = 90% >= 85%
+
+        cooc_map = {("P1", "P2"): cooc}
+        conf, src = topology_engine._get_edge_confidence("P1", "P2", cooc_map)
+
+        assert conf == 0.85
+        assert src == TopologySource.SILVER
+
     def test_bronze_topology_is_medium_confidence(self):
         """Geometric inference (Bronze) gives MEDIUM confidence."""
         level = score_to_level(0.60)
         assert level == ConfidenceLevel.MEDIUM
+
 
     def test_low_consistency_reduces_confidence(self):
         """If only 3/10 downstream poles reported dark, confidence drops."""
