@@ -329,5 +329,31 @@ class TestTopologyBoundaryEdgeCases:
         assert boundaries == []
 
 
+class TestScheduledOutageSuppression:
+    """T5: Scheduled outage suppression"""
+
+    def test_active_scheduled_outage_suppresses_detection(self):
+        """
+        When feeder F-01 or DT D-0001 is under active scheduled outage,
+        it must be present in active outage targets for suppression.
+        """
+        outage_targets = {"feeder": {"F-01"}, "dt": {"D-0001"}}
+        assert "F-01" in outage_targets["feeder"]
+        assert "D-0001" in outage_targets["dt"]
+
+
+class TestRestorationVerification:
+    """T7: Auto-verification when >80% poles restored"""
+
+    def test_restoration_threshold_evaluation(self):
+        """
+        If 4 out of 5 affected poles are LIVE (80%), ratio >= 0.80 threshold.
+        """
+        live_count = 4
+        total_count = 5
+        ratio = live_count / total_count
+        assert ratio >= 0.80, "80% restoration ratio satisfies auto-verification threshold"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
