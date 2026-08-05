@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, ShieldAlert, Clock, MapPin, Users, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, differenceInMinutes } from 'date-fns';
 
 export default function IncidentList({ incidents, selectedIncident, onSelectIncident }) {
+  const [now, setNow] = useState(new Date());
+
+  // 1-second live ticker update for SLA elapsed timer
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getAgeSlaColor = (createdAt) => {
+    const mins = differenceInMinutes(now, new Date(createdAt));
+    if (mins >= 30) return { color: '#ef4444', label: `${mins}m (OVERDUE)`, isUrgent: true };
+    if (mins >= 15) return { color: '#eab308', label: `${mins}m elapsed`, isUrgent: false };
+    return { color: 'var(--text-muted)', label: formatDistanceToNow(new Date(createdAt), { addSuffix: true }), isUrgent: false };
+  };
+
   return (
     <div className="sidebar">
       <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -27,6 +42,7 @@ export default function IncidentList({ incidents, selectedIncident, onSelectInci
         ) : (
           incidents.map((inc) => {
             const isSelected = selectedIncident && selectedIncident.id === inc.id;
+            const sla = getAgeSlaColor(inc.created_at);
 
             // Confidence Traffic Light Badge
             let badgeClass = 'badge-high';
@@ -58,9 +74,9 @@ export default function IncidentList({ incidents, selectedIncident, onSelectInci
                   <span className={`badge ${badgeClass}`}>
                     {confidenceText} ({(inc.confidence_score * 100).toFixed(0)}%)
                   </span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: sla.color, fontWeight: sla.isUrgent ? 700 : 400, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                     <Clock size={12} />
-                    {formatDistanceToNow(new Date(inc.created_at), { addSuffix: true })}
+                    {sla.label}
                   </span>
                 </div>
 
