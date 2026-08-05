@@ -1,0 +1,28 @@
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+venv/
+ENV/
+
+# Databases & local logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Node / React Frontend
+node_modules/
+dist/
+.DS_Store
+
+# IDE / Gemini artifacts
+.vscode/
+.idea/
+.gemini/
