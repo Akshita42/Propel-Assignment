@@ -25,10 +25,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Pole, DistributionTransformer, Incident, IncidentStatus, IncidentPole, PoleState
+from app.models import Pole, DistributionTransformer, Incident, IncidentStatus, IncidentPole, PoleState, ScheduledOutage
 from app.schemas.schemas import (
     SimulateSpanFault, SimulateDTFault, SimulateFeederFault,
-    SimulateDeviceFailure, SimulateRepair, SimulateNoise, SimulationResult
+    SimulateDeviceFailure, SimulateRepair, SimulateNoise, SimulateScheduledOutage, SimulationResult
 )
 from app.core.topology_engine import topology_engine
 from app.api.ingest import process_single_message, _run_fault_detection, _run_restoration_check_all
@@ -350,6 +350,36 @@ async def simulate_noise(
         scenario=f"noise_{data.noise_type}",
         messages_generated=sent,
         note=f"Injected {data.noise_type} noise for DT {data.dt_id}. {sent} messages. No new incidents expected.",
+    )
+
+
+@router.post("/scheduled-outage", response_model=SimulationResult)
+async def simulate_scheduled_outage(
+    data: SimulateScheduledOutage,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Inject a dynamic scheduled outage for load shedding / planned maintenance.
+    Active scheduled outages suppress fault tickets during their time window.
+    """
+    now = datetime.now(timezone.utc)
+    outage_id = f"SO-SIM-{now.strftime('%H%M%S')}"
+
+    outage = ScheduledOutage(
+        id=outage_id,
+        scope=data.scope,
+        target_id=data.target_id,
+        start_time=now - timedelta(minutes=5),  # Active right now
+        end_time=now + timedelta(hours=data.duration_hours),
+        reason=data.reason,
+    )
+    session.add(outage)
+    await session.commit()
+
+    return SimulationResult(
+        scenario="scheduled_outage",
+        messages_generated=1,
+        note=f"Injected active scheduled outage {outage_id} on {data.scope.upper()} {data.target_id}. Subsequent faults on this target will be suppressed.",
     )
 
 

@@ -127,6 +127,14 @@ export default function SimulatorPanel({ isOpen, onClose, onRefresh }) {
         >
           <Radio size={14} /> 4. Inject Duplicate/Stale Noise
         </button>
+
+        <button
+          onClick={() => runSimulation('scheduled-outage', { target_id: selectedDt, scope: 'dt', reason: 'Planned load shedding' })}
+          disabled={loading}
+          style={{ padding: '0.6rem', backgroundColor: '#a855f7', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <ShieldCheck size={14} /> 5. Inject Scheduled Outage (Suppression Test)
+        </button>
       </div>
 
       {/* Output Log */}

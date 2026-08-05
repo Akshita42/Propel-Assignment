@@ -127,6 +127,13 @@ class SimulateNoise(BaseModel):
     noise_type: str = Field(..., pattern="^(duplicate|out_of_order|stale)$")
 
 
+class SimulateScheduledOutage(BaseModel):
+    target_id: str
+    scope: str = "dt"       # "dt" or "feeder"
+    duration_hours: int = 2
+    reason: str = "Planned maintenance - jumper replacement"
+
+
 class SimulationResult(BaseModel):
     scenario: str
     messages_generated: int
