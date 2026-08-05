@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, Bot, AlertTriangle, ShieldCheck, UserCheck, Wrench, CheckCircle, Navigation } from 'lucide-react';
+import axios from 'axios';
+
 
 export default function IncidentDetailModal({ incident, onClose, onUpdateStatus }) {
   const [errorMsg, setErrorMsg] = useState(null);
@@ -90,7 +92,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdateStatus 
           </div>
         )}
 
-        {/* Status Lifecycle Controls */}
+        {/* Status Lifecycle & Repair Controls */}
         <div style={{ marginTop: '1.5rem' }}>
           <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
             WORKFLOW ACTIONS
@@ -126,9 +128,53 @@ export default function IncidentDetailModal({ incident, onClose, onUpdateStatus 
                 <CheckCircle size={16} /> Mark Fixed (Requires Telemetry Verification)
               </button>
             )}
+
+            {/* Live Telemetry Repair Trigger — Demonstrates Auto-Verification */}
+            {incident.status !== 'VERIFIED' && incident.status !== 'CLOSED' ? (
+              <button
+                onClick={async () => {
+                  setErrorMsg(null);
+                  setLoading(true);
+                  try {
+                    await axios.post('/api/simulate/repair', { incident_id: incident.id });
+                    await onUpdateStatus(incident.id, 'VERIFIED');
+                  } catch (err) {
+                    setErrorMsg('Simulation repair failed.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                style={{
+                  padding: '0.75rem',
+                  background: '#22c55e',
+                  color: '#0f172a',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  marginTop: '0.5rem',
+                }}
+              >
+                <ShieldCheck size={18} /> Simulate Telemetry Repair (Auto-Verify & Close Ticket)
+              </button>
+            ) : (
+              <div style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22c55e', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
+                <CheckCircle size={24} style={{ color: '#22c55e', marginBottom: '0.35rem' }} />
+                <p style={{ fontWeight: 700, color: '#4ade80', fontSize: '0.9rem' }}>Ticket Verified & Closed</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  Telemetry confirmed 100% power restoration. Auto-closed by Telemetry Guard.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
