@@ -105,6 +105,22 @@ async def process_single_message(
     return "accepted", False
 
 
+# In-memory debouncer to coalesce rapid-fire telemetry bursts within a 2-second window
+_last_detection_trigger: dict[str, float] = {}
+
+
+def should_trigger_detection(dt_id: Optional[str]) -> bool:
+    """Coalesce rapid power_lost signals for the same DT within 2 seconds."""
+    import time
+    now = time.time()
+    key = dt_id or "__global__"
+    last_time = _last_detection_trigger.get(key, 0.0)
+    if now - last_time < 2.0:
+        return False
+    _last_detection_trigger[key] = now
+    return True
+
+
 @router.post("", response_model=IngestResponse)
 async def ingest_telemetry(
     payload: TelemetryPayload,
@@ -120,10 +136,11 @@ async def ingest_telemetry(
         unknown_poles=1 if status == "unknown_pole" else 0,
     )
 
-    # Trigger fault detection in background if power_lost received
+    # Trigger fault detection in background if power_lost received (debounced)
     if status == "accepted" and payload.event in ("power_lost",):
         dt_id = topology_engine.get_pole_dt(payload.pole_id)
-        background_tasks.add_task(_run_fault_detection, dt_id)
+        if should_trigger_detection(dt_id):
+            background_tasks.add_task(_run_fault_detection, dt_id)
 
     # Trigger restoration check if power_restored received
     if status == "accepted" and payload.event in ("power_restored", "boot"):
@@ -161,10 +178,9 @@ async def ingest_batch(
             unknown += 1
 
     if has_power_lost:
-        if len(affected_dt_ids) == 1:
-            background_tasks.add_task(_run_fault_detection, list(affected_dt_ids)[0])
-        else:
-            background_tasks.add_task(_run_fault_detection, None)
+        target_dt = list(affected_dt_ids)[0] if len(affected_dt_ids) == 1 else None
+        if should_trigger_detection(target_dt):
+            background_tasks.add_task(_run_fault_detection, target_dt)
     if has_power_restored:
         background_tasks.add_task(_run_restoration_check_all)
 
