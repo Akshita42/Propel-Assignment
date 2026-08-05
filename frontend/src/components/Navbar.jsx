@@ -1,7 +1,7 @@
 import React from 'react';
-import { Zap, AlertTriangle, CheckCircle, Radio, Cpu } from 'lucide-react';
+import { Zap, AlertTriangle, CheckCircle, Radio, Cpu, Volume2, VolumeX } from 'lucide-react';
 
-export default function Navbar({ stats, sseConnected }) {
+export default function Navbar({ stats, sseConnected, soundMuted, onToggleSound }) {
   return (
     <header className="navbar">
       <div className="brand">
@@ -43,11 +43,30 @@ export default function Navbar({ stats, sseConnected }) {
 
         <div className="stat-item" style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '1.25rem' }}>
           <span className="stat-value" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-            <Radio size={14} className={sseConnected ? 'text-green-500' : 'text-red-500'} style={{ color: sseConnected ? '#22c55e' : '#ef4444' }} />
+            <Radio size={14} style={{ color: sseConnected ? '#22c55e' : '#ef4444' }} />
             {sseConnected ? 'LIVE STREAM' : 'OFFLINE'}
           </span>
           <span className="stat-label">Telemetry Feed</span>
         </div>
+
+        <button
+          onClick={onToggleSound}
+          title={soundMuted ? 'Unmute alert audio' : 'Mute alert audio'}
+          style={{
+            background: 'none',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            color: soundMuted ? '#64748b' : '#3b82f6',
+            padding: '0.4rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: '0.5rem',
+          }}
+        >
+          {soundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+        </button>
       </div>
     </header>
   );

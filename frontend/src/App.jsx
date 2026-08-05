@@ -18,6 +18,30 @@ export default function App() {
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(false);
+
+  // Web Audio synthesis for control-room incident alert chime
+  const playAlertChime = useCallback(() => {
+    if (soundMuted) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (err) {
+      // Audio context suppressed by un-interacted browser policy
+    }
+  }, [soundMuted]);
 
   // Fetch initial state
   const fetchData = useCallback(async () => {
@@ -32,7 +56,13 @@ export default function App() {
       setStats(statsRes.data);
       setPoles(polesRes.data);
       setDts(dtsRes.data);
-      setIncidents(incidentsRes.data);
+
+      setIncidents((prev) => {
+        if (incidentsRes.data.length > prev.length) {
+          playAlertChime();
+        }
+        return incidentsRes.data;
+      });
 
       // Fetch topology edges for all DTs (to draw wire lines on the map)
       const dtIds = dtsRes.data.map((d) => d.dt_id);
@@ -109,7 +139,12 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Top Header Navbar */}
-      <Navbar stats={stats} sseConnected={sseConnected} />
+      <Navbar
+        stats={stats}
+        sseConnected={sseConnected}
+        soundMuted={soundMuted}
+        onToggleSound={() => setSoundMuted((m) => !m)}
+      />
 
       {/* Main Workspace (Map + Incident Sidebar) */}
       <div className="main-content">
