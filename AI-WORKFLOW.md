@@ -31,37 +31,38 @@ This document details how AI assistance was integrated into the software develop
 - **1D PCA Geometric Line Inference:** Writing the linear algebra projection formula to convert 2D GPS coordinates into an ordered 1D physical line vector.
 - **Topology Consistency Ratio Formula:** Defining expected dark vs. actual dark ratio math to gracefully handle missing telemetry and legacy 1.2.x firmware silent drops.
 
-### Why We Drew the Line There:
-We delegated boilerplate infrastructure (FastAPI routes, Pydantic models, React styling) because LLMs excel at syntax generation for well-established patterns. However, we strictly hand-architected the core fault localization algorithms (`fault_detector.py`, `topology_engine.py`) because AI code generation consistently failed to reason about radial tree constraints, introduced $O(N^2)$ distance loops, and hallucinated false span connections when data was incomplete. The business domain math required human derivation and explicit automated unit test verification.
+### Why I Drew the Line There:
+I delegated boilerplate infrastructure (FastAPI routes, Pydantic models, React styling, component layouts) because LLMs excel at syntax generation for well-established patterns. However, I strictly hand-architected the core fault localization algorithms (`fault_detector.py`, `topology_engine.py`) because AI code generation consistently failed to reason about radial tree constraints, introduced $O(N^2)$ distance loops, and hallucinated false span connections when data was incomplete. The business domain math required human derivation and explicit automated unit test verification.
 
 ---
 
-## 3. Concrete Cases Where AI Was Misleading / Wrong & How We Caught It
+## 3. Concrete Cases Where AI Was Misleading / Wrong & How I Caught It
 
 ### Case 1: $O(N^2)$ Pairwise Distance Matrix in Co-Occurrence Learning
 - **What AI Suggested:** The AI proposed calculating all-pairs pairwise co-dark matrices across all 38,400 poles during telemetry ingest.
 - **Why It Failed:** During initial burst load testing with 5,000 messages, database write locks occurred because an $O(N^2)$ update generated over $100,000$ database writes per burst.
-- **How We Caught It:** Identified during `test_telemetry_burst_ingest_throughput` execution in Pytest when ingest latency spiked to $>4\text{ seconds}$.
+- **How I Caught It:** Identified during `test_telemetry_burst_ingest_throughput` execution in Pytest when ingest latency spiked to $>4\text{ seconds}$.
 - **Resolution:** Replaced pairwise updates with an $O(N)$ tree path traversal (`update_cooccurrence_history`) restricted to ancestor-child pairs within $K=3$ hops along the LT line tree.
 
 ### Case 2: WebSockets Disconnects on Cloud Proxies
 - **What AI Suggested:** The AI initially generated a full-duplex WebSockets implementation (`/ws/telemetry`).
 - **Why It Failed:** When deployed to Render's free tier, Cloudflare/Render HTTP proxies dropped idle WebSocket connections after 60 seconds, resulting in repeated client reconnect loops.
-- **How We Caught It:** Browser console logs showed constant `WebSocket connection to 'wss://...' failed` errors during staging verification.
+- **How I Caught It:** Browser console logs showed constant `WebSocket connection to 'wss://...' failed` errors during staging verification.
 - **Resolution:** Replaced WebSockets with Server-Sent Events (SSE) using `sse_starlette` (`/api/sse`) and a 15-second heartbeat ping (`event: heartbeat`).
 
 ### Case 3: AI Proposing LLM for Direct Fault Localization
 - **What AI Suggested:** The AI suggested passing raw telemetry event JSON arrays directly into a GPT-4 / Gemini prompt to diagnose broken wire spans.
 - **Why It Failed:** Prompt tests revealed that the LLM hallucinated non-existent pole IDs 15% of the time, was non-deterministic, and took 2.5 seconds per query.
-- **How We Caught It:** Automated Pytest assertion checks (`TestBoundaryDetection`) failed when comparing LLM output against known synthetic graph ground truth.
+- **How I Caught It:** Automated Pytest assertion checks (`TestBoundaryDetection`) failed when comparing LLM output against known synthetic graph ground truth.
 - **Resolution:** Restricted LLM usage strictly to generating plain English dispatch summaries *after* deterministic BFS graph traversal pinpointed the exact span.
 
 ---
 
 ## 4. Code Base Attribution Estimate
 
-- **AI-Generated / AI-Assisted:** ~65% (FastAPI boilerplate, Pydantic models, React Leaflet layout, CSS glassmorphism, Pytest fixtures).
-- **Hand-Architected / Refactored / Verified:** ~35% (Core graph traversal algorithms, dead-sensor paradox filter, PCA geometric inference, consistency ratio formulas, SSE streaming, and performance optimizations).
+- **AI-Generated / AI-Assisted:** ~85% (FastAPI boilerplate, Pydantic models, React Leaflet layout, CSS glassmorphism, Pytest fixtures, database models).
+- **Hand-Architected / Refactored / Verified:** ~15% (Core graph traversal algorithms, dead-sensor paradox filter, PCA geometric inference, consistency ratio formulas, SSE streaming, and performance optimizations).
+
 
 ---
 

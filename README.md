@@ -26,7 +26,8 @@ docker compose up --build
 | :--- | :--- | :--- |
 | **GitHub Repository** | https://github.com/Akshita42/Propel-Assignment | Public repository with full incremental commit history |
 | **Live Web Application** | https://propel-fault-localizer-6yq5.onrender.com | Live cloud deployment on Render |
-| **5-Minute Video Demo** | https://loom.com/share/demo-placeholder | Video walkthrough of fault detection and simulator |
+| **5-Minute Video Demo** | https://drive.google.com/drive/folders/1ter7b4iIid_gEAQ-ZT7UdeoZSJCyxDlu?usp=sharing | Video walkthrough of fault detection and simulator |
+
 
 > ⚠️ **Note on Live URL:** Hosted on Render Free Tier. The initial HTTP request after 15 minutes of inactivity may take 30–50 seconds for cold-start container spin up. Please allow time for first response.
 

@@ -68,7 +68,8 @@ This document records technical design decisions, trade-off analyses, key assump
 
 ---
 
-## What We Would Do With Two More Weeks
+## What I Would Do With Two More Weeks
+
 
 1. **Distributed Redis Pub/Sub for SSE:** Replace in-memory SSE listener queues with Redis Pub/Sub to allow horizontal scaling across multiple FastAPI worker containers.
 2. **Interactive Manual Topology Editor:** Build a visual drag-and-drop tree editor in the React Leaflet UI so control room engineers can manually correct inferred Bronze/Silver topology links.
