@@ -355,5 +355,30 @@ class TestRestorationVerification:
         assert ratio >= 0.80, "80% restoration ratio satisfies auto-verification threshold"
 
 
+class TestEndToEndIntegration:
+    """Integration test verifying end-to-end fault flow"""
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_fault_candidate_assembly(self):
+        """
+        Verify candidate assembly for a linear span fault:
+        P1(LIVE) -> P2(DARK) -> P3(DARK).
+        """
+        topology = build_linear_topology("D-TEST", ["P1", "P2", "P3"])
+        pole_states = {
+            "P1": make_mock_pole("P1", dt_id="D-TEST", state=PoleState.LIVE),
+            "P2": make_mock_pole("P2", dt_id="D-TEST", state=PoleState.DARK),
+            "P3": make_mock_pole("P3", dt_id="D-TEST", state=PoleState.DARK),
+        }
+        dark_set = {"P2", "P3"}
+        boundaries = topology.get_upstream_boundary(dark_set)
+
+        assert len(boundaries) == 1
+        live_parent, first_dark, _ = boundaries[0]
+        assert live_parent == "P1"
+        assert first_dark == "P2"
+        assert topology.get_downstream(first_dark) == ["P2", "P3"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
