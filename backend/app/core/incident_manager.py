@@ -19,10 +19,11 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    Pole, DistributionTransformer, Incident, IncidentPole,
+    Pole, DistributionTransformer, Incident, IncidentPole, PoleCooccurrence,
     PoleState, FaultType, IncidentStatus, ConfidenceLevel, TopologySource
 )
 from app.core.fault_detector import FaultCandidate, score_to_level
+from app.core.topology_engine import topology_engine
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,12 @@ async def create_incident_from_candidate(
     except Exception as e:
         logger.warning(f"AI summary generation failed: {e}")
 
+    # Dynamic Silver Layer: update co-occurrence counts for local tree path pairs
+    try:
+        await update_cooccurrence_history(session, candidate.dt_id, candidate.affected_pole_ids)
+    except Exception as e:
+        logger.warning(f"Failed to update co-occurrence history: {e}")
+
     logger.info(
         f"🚨 Incident created: {incident.id} | {incident.fault_type.value} | "
         f"DT={incident.dt_id} | confidence={incident.confidence_score:.2f} | "
@@ -198,6 +205,66 @@ async def create_incident_from_candidate(
     )
 
     return incident
+
+
+async def update_cooccurrence_history(
+    session: AsyncSession,
+    dt_id: str,
+    affected_pole_ids: list[str],
+):
+    """
+    Dynamically populate and update PoleCooccurrence (Silver Layer).
+
+    Option B: Only update ancestor-child pairs within K=3 hops along the
+    LT line tree path. This keeps updates fast (O(N) instead of O(N^2)) and
+    ensures co-occurrence tracking directly validates local tree edges.
+    """
+    if not dt_id or not affected_pole_ids:
+        return
+
+    topology = topology_engine.get_dt_topology(dt_id)
+    if not topology:
+        return
+
+    dark_set = set(affected_pole_ids)
+    now = datetime.now(timezone.utc)
+
+    # Track ancestor-child pairs within 3 hops
+    pairs_to_update = set()
+    for child_id in affected_pole_ids:
+        curr = child_id
+        for _ in range(3):  # K=3 hops
+            parent_id = topology.parent_map.get(curr)
+            if not parent_id:
+                break
+            if parent_id in dark_set:
+                pair = (min(parent_id, child_id), max(parent_id, child_id))
+                pairs_to_update.add(pair)
+            curr = parent_id
+
+    for pole_a, pole_b in pairs_to_update:
+        result = await session.execute(
+            select(PoleCooccurrence).where(
+                (PoleCooccurrence.pole_a_id == pole_a) &
+                (PoleCooccurrence.pole_b_id == pole_b)
+            )
+        )
+        row = result.scalar_one_or_none()
+
+        if row:
+            row.co_dark_count += 1
+            row.a_dark_total += 1
+            row.b_dark_total += 1
+            row.last_updated = now
+        else:
+            session.add(PoleCooccurrence(
+                pole_a_id=pole_a,
+                pole_b_id=pole_b,
+                co_dark_count=1,
+                a_dark_total=1,
+                b_dark_total=1,
+                last_updated=now,
+            ))
 
 
 async def _find_existing_incident(
