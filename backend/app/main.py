@@ -158,11 +158,63 @@ async def health():
 
 
 # ── Serve React Frontend (production) ─────────────────────────────────────────
-STATIC_DIR = "/app/static"
-if os.path.exists(STATIC_DIR):
-    app.mount("/assets", StaticFiles(directory=f"{STATIC_DIR}/assets"), name="assets")
+def get_static_dir():
+    """
+    Find the directory containing the built React frontend (index.html).
 
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        """Serve React SPA for all non-API routes."""
-        return FileResponse(f"{STATIC_DIR}/index.html")
+    Render deployment: build.sh copies frontend/dist/* → backend/static/
+    The CWD when uvicorn starts is /opt/render/project/src/backend (after `cd backend`)
+    So the static dir is at:  <CWD>/static  →  /opt/render/project/src/backend/static
+    """
+    possible_dirs = [
+        # Render: CWD is backend/ after `cd backend` in startCommand
+        os.path.join(os.getcwd(), "static"),
+        # Relative to this file (backend/app/main.py → backend/static)
+        os.path.join(os.path.dirname(__file__), "..", "static"),
+        # Docker: mounted via docker-compose volume
+        "/app/static",
+        # Local dev: frontend dist relative to project root
+        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"),
+        os.path.abspath("../frontend/dist"),
+    ]
+    for d in possible_dirs:
+        norm = os.path.normpath(d)
+        idx = os.path.join(norm, "index.html")
+        if os.path.exists(idx):
+            return norm
+    return None
+
+
+STATIC_DIR = get_static_dir()
+if STATIC_DIR:
+    logger.info(f"✅ Serving static frontend from: {STATIC_DIR}")
+    assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+else:
+    logger.warning(
+        f"⚠️  No frontend static files found. CWD={os.getcwd()} "
+        f"__file__={__file__}. "
+        f"Run build.sh first to build the React frontend."
+    )
+
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """Serve React SPA for all non-API routes."""
+    if full_path.startswith("api/"):
+        return {"detail": "API endpoint not found"}
+
+    static_dir = get_static_dir()
+    if static_dir:
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+
+    return {
+        "status": "backend_running",
+        "message": "Propel Fault Localizer backend is live, but frontend static assets (index.html) were not built or found.",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
