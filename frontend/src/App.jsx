@@ -45,43 +45,21 @@ export default function App() {
 
   // Fetch initial state
   const fetchData = useCallback(async () => {
-    try {
-      const [statsRes, polesRes, dtsRes, incidentsRes] = await Promise.all([
-        axios.get('/api/network/stats'),
-        axios.get('/api/network/poles'),
-        axios.get('/api/network/dts'),
-        axios.get('/api/incidents/active'),
-      ]);
-
-      setStats(statsRes.data);
-      setPoles(polesRes.data);
-      setDts(dtsRes.data);
-
+    axios.get('/api/network/stats').then((res) => setStats(res.data)).catch((err) => console.error('Stats error:', err));
+    axios.get('/api/network/poles').then((res) => setPoles(res.data)).catch((err) => console.error('Poles error:', err));
+    axios.get('/api/network/dts').then((res) => setDts(res.data)).catch((err) => console.error('DTs error:', err));
+    axios.get('/api/incidents/active').then((res) => {
       setIncidents((prev) => {
-        if (incidentsRes.data.length > prev.length) {
+        if (res.data.length > prev.length) {
           playAlertChime();
         }
-        return incidentsRes.data;
+        return res.data;
       });
+    }).catch((err) => console.error('Incidents error:', err));
 
-      // Fetch topology edges for all DTs (to draw wire lines on the map)
-      const dtIds = dtsRes.data.map((d) => d.dt_id);
-      const topoResults = await Promise.all(
-        dtIds.map((dtId) => axios.get(`/api/network/topology/${dtId}`).catch(() => null))
-      );
-      const allEdges = [];
-      topoResults.forEach((res, i) => {
-        if (res && res.data && res.data.edges) {
-          res.data.edges.forEach((edge) => {
-            allEdges.push({ ...edge, dt_id: dtIds[i] });
-          });
-        }
-      });
-      setTopoEdges(allEdges);
-    } catch (err) {
-      console.error('Error fetching grid data:', err);
-    }
-  }, []);
+    axios.get('/api/network/topology-all').then((res) => setTopoEdges(res.data)).catch((err) => console.error('Topology error:', err));
+  }, [playAlertChime]);
+
 
   useEffect(() => {
     fetchData();

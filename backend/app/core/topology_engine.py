@@ -331,6 +331,9 @@ class TopologyEngine:
     def get_dt_topology(self, dt_id: str) -> Optional[DTTopology]:
         return self._dt_topologies.get(dt_id)
 
+    def get_all_dt_topologies(self) -> dict[str, DTTopology]:
+        return self._dt_topologies
+
     def get_pole_dt(self, pole_id: str) -> Optional[str]:
         return self._pole_to_dt.get(pole_id)
 

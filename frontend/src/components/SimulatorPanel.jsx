@@ -113,11 +113,19 @@ export default function SimulatorPanel({ isOpen, onClose, onRefresh }) {
         </button>
 
         <button
+          onClick={() => runSimulation('feeder-fault', { feeder_id: 'F-01' })}
+          disabled={loading}
+          style={{ padding: '0.6rem', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <Zap size={14} /> 3. Inject Feeder Fault (11kV Substation Outage)
+        </button>
+
+        <button
           onClick={() => runSimulation('device-failure', { pole_id: selectedSpanFrom })}
           disabled={loading}
           style={{ padding: '0.6rem', backgroundColor: '#eab308', color: '#0f172a', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          <AlertTriangle size={14} /> 3. Inject Dead Sensor (Should NOT Create Ticket)
+          <AlertTriangle size={14} /> 4. Inject Dead Sensor (Should NOT Create Ticket)
         </button>
 
         <button
@@ -125,7 +133,7 @@ export default function SimulatorPanel({ isOpen, onClose, onRefresh }) {
           disabled={loading}
           style={{ padding: '0.6rem', backgroundColor: '#64748b', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          <Radio size={14} /> 4. Inject Duplicate/Stale Noise
+          <Radio size={14} /> 5. Inject Duplicate/Stale Noise
         </button>
 
         <button
@@ -133,8 +141,9 @@ export default function SimulatorPanel({ isOpen, onClose, onRefresh }) {
           disabled={loading}
           style={{ padding: '0.6rem', backgroundColor: '#a855f7', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          <ShieldCheck size={14} /> 5. Inject Scheduled Outage (Suppression Test)
+          <ShieldCheck size={14} /> 6. Inject Scheduled Outage (Suppression Test)
         </button>
+
       </div>
 
       {/* Output Log */}

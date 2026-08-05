@@ -51,6 +51,24 @@ async def get_all_dts(session: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@router.get("/topology-all", response_model=List[TopologyEdgeOut])
+async def get_all_topology_edges():
+    """Get all topology tree edges across all DTs (for high-performance map rendering)."""
+    all_topos = topology_engine.get_all_dt_topologies()
+    edges = []
+    for dt_id, topo in all_topos.items():
+        for e in topo.edges:
+            edges.append(
+                TopologyEdgeOut(
+                    parent_id=e.parent_id,
+                    child_id=e.child_id,
+                    confidence=e.confidence,
+                    source=e.source,
+                )
+            )
+    return edges
+
+
 @router.get("/topology/{dt_id}", response_model=TopologyOut)
 async def get_dt_topology(dt_id: str):
     """Get the topology tree edges for a specific DT (for map rendering)."""

@@ -50,6 +50,7 @@ class IncidentStatus(str, enum.Enum):
     RESOLVED = "RESOLVED"           # Crew says fixed — pending telemetry verification
     VERIFIED = "VERIFIED"           # Telemetry confirms power restored
     CLOSED = "CLOSED"
+    SUPPRESSED = "SUPPRESSED"       # Matches active scheduled outage — flagged, not dispatched
 
 
 class ConfidenceLevel(str, enum.Enum):

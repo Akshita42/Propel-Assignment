@@ -40,7 +40,43 @@ router = APIRouter(prefix="/api/simulate", tags=["simulator"])
 random.seed()  # Fresh random seed for simulator
 
 
+@router.get("/dts")
+async def list_simulator_dts(session: AsyncSession = Depends(get_db)):
+    """List transformers for simulator target dropdown."""
+    from sqlalchemy import func
+    result = await session.execute(
+        select(Pole.dt_id, func.count(Pole.pole_id))
+        .group_by(Pole.dt_id)
+        .order_by(Pole.dt_id)
+    )
+    rows = result.fetchall()
+
+    output = []
+    for dt_id, count in rows:
+        topo = topology_engine.get_dt_topology(dt_id)
+        source = topo.source.value if topo else "NONE"
+        output.append({
+            "dt_id": dt_id,
+            "pole_count": count,
+            "topology_source": source,
+        })
+    return output
+
+
+@router.get("/dts/{dt_id}/poles")
+async def list_simulator_dt_poles(dt_id: str, session: AsyncSession = Depends(get_db)):
+    """List poles for a transformer for simulator span picker."""
+    result = await session.execute(
+        select(Pole)
+        .where(Pole.dt_id == dt_id)
+        .order_by(Pole.seq_on_line.nullslast(), Pole.pole_id)
+    )
+    poles = result.scalars().all()
+    return [{"pole_id": p.pole_id, "lat": p.lat, "lon": p.lon} for p in poles]
+
+
 def make_telemetry(
+
     pole: Pole,
     event: str,
     energized: bool,
