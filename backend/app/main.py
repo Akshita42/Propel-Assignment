@@ -76,10 +76,12 @@ async def heartbeat_timeout_job():
                             Pole.last_state == PoleState.LIVE,
                             Pole.last_event_ts < timeout_threshold,
                             Pole.device_id.isnot(None),
+                            Pole.is_legacy_firmware == True,  # Only legacy 1.2.x firmware devices go silent on power loss
                         )
                     )
                 )
                 timed_out = result.scalars().all()
+
 
                 if timed_out:
                     for pole in timed_out:
