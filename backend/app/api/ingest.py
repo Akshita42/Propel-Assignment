@@ -14,6 +14,7 @@ After state update, triggers fault detection cycle if power_lost event received.
 
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy import select
