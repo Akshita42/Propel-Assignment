@@ -201,6 +201,10 @@ class Incident(Base):
     topology_source = Column(SAEnum(TopologySource), nullable=False)
     consistency_ratio = Column(Float, nullable=True)    # actual_dark / expected_dark
 
+    # Suppression (Scheduled Outage)
+    is_suppressed = Column(Boolean, default=False)
+    suppression_reason = Column(String, nullable=True)
+
     # Resolution
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)

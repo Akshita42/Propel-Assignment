@@ -44,10 +44,13 @@ export default function IncidentList({ incidents, selectedIncident, onSelectInci
             const isSelected = selectedIncident && selectedIncident.id === inc.id;
             const sla = getAgeSlaColor(inc.created_at);
 
-            // Confidence Traffic Light Badge
+            // Confidence / Status Traffic Light Badge
             let badgeClass = 'badge-high';
             let confidenceText = 'Confirmed Span';
-            if (inc.confidence_level === 'MEDIUM') {
+            if (inc.status === 'SUPPRESSED' || inc.is_suppressed) {
+              badgeClass = 'badge-suppressed';
+              confidenceText = 'Planned Outage';
+            } else if (inc.confidence_level === 'MEDIUM') {
               badgeClass = 'badge-medium';
               confidenceText = 'Estimated Zone';
             } else if (inc.confidence_level === 'LOW') {

@@ -83,6 +83,10 @@ class FaultCandidate:
     ward: Optional[str] = None
     households_affected: Optional[int] = None
 
+    # Scheduled outage suppression warning flag (~10% cancelled outage handling)
+    is_suppressed: bool = False
+    suppression_reason: Optional[str] = None
+
 
 async def get_active_scheduled_outage_targets(session: AsyncSession) -> dict[str, set[str]]:
     """
@@ -219,14 +223,6 @@ async def detect_faults_for_dt(
     if not dt:
         return []
 
-    # PRE-FILTER: Scheduled outage suppression
-    if dt.feeder_id in outage_targets.get("feeder", set()):
-        logger.debug(f"DT {dt_id}: feeder {dt.feeder_id} under scheduled outage — suppressing")
-        return []
-    if dt_id in outage_targets.get("dt", set()):
-        logger.debug(f"DT {dt_id}: under scheduled outage — suppressing")
-        return []
-
     # Build dark set (poles we believe are without power)
     dark_set = {
         pole_id for pole_id, pole in pole_states.items()
@@ -236,6 +232,33 @@ async def detect_faults_for_dt(
 
     if not dark_set:
         return []
+
+    # PRE-FILTER: Scheduled outage suppression check
+    outage_reason = None
+    if dt.feeder_id in outage_targets.get("feeder", set()):
+        outage_reason = f"Active planned outage on Feeder {dt.feeder_id}"
+    elif dt_id in outage_targets.get("dt", set()):
+        outage_reason = f"Active planned outage on DT {dt_id}"
+
+    if outage_reason:
+        # Instead of silent drop, create a candidate flagged as SUPPRESSED
+        # (Accounts for ~10% of scheduled outages that are cancelled without feed updates)
+        logger.info(f"DT {dt_id}: under scheduled outage ({outage_reason}) — flagging as suppressed incident")
+        return [FaultCandidate(
+            dt_id=dt_id,
+            feeder_id=dt.feeder_id,
+            fault_type=FaultType.DT,
+            fault_lat=dt.lat,
+            fault_lon=dt.lon,
+            affected_pole_ids=list(dark_set),
+            confidence_score=0.20,
+            topology_source=topology.source,
+            pincode=_most_common_pincode(pole_states),
+            ward=_most_common_ward(pole_states),
+            households_affected=dt.households_served,
+            is_suppressed=True,
+            suppression_reason=f"{outage_reason} (Warning: ~10% of planned outages are cancelled without feed updates)",
+        )]
 
     # FEEDER FAULT: If all poles across ALL DTs on this feeder are dark
     # (handled at feeder level in detect_all_faults — skip here)

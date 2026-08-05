@@ -142,12 +142,13 @@ async def create_incident_from_candidate(
 
     now = datetime.now(timezone.utc)
     confidence_level = score_to_level(candidate.confidence_score)
+    status = IncidentStatus.SUPPRESSED if candidate.is_suppressed else IncidentStatus.DETECTED
 
     incident = Incident(
         id=uuid.uuid4(),
         created_at=now,
         updated_at=now,
-        status=IncidentStatus.DETECTED,
+        status=status,
         fault_type=candidate.fault_type,
         dt_id=candidate.dt_id,
         feeder_id=candidate.feeder_id,
@@ -163,6 +164,8 @@ async def create_incident_from_candidate(
         confidence_level=confidence_level,
         topology_source=candidate.topology_source,
         consistency_ratio=candidate.consistency_ratio,
+        is_suppressed=candidate.is_suppressed,
+        suppression_reason=candidate.suppression_reason,
     )
     session.add(incident)
     await session.flush()  # Get the ID
